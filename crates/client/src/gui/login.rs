@@ -1,4 +1,4 @@
-use common::User;
+use common::user::User;
 use gpui::{AppContext, Context, Entity, IntoElement, ParentElement, Styled, Window, div};
 use gpui_component::{
     WindowExt,

@@ -1,4 +1,4 @@
-use common::{Message, User};
+use common::{bastion::Bastion, message::Message, user::User};
 use gpui::{
     AppContext, Context, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, Window, div, rgb,
@@ -12,6 +12,7 @@ use gpui_component::{
 use crate::gui::Nefes;
 
 pub struct Chat {
+    bastion: Bastion,
     users: Vec<User>,
     chat_messages: Vec<Message>,
     message_input: Entity<InputState>,
@@ -26,9 +27,16 @@ impl Chat {
             input_state
         });
 
+        let bastion = Bastion::new("Bastion").unwrap();
+
+        let bastion = || bastion.clone();
         cx.subscribe_in(&message_input, window, |this, input, event, window, cx| {
             if matches!(event, InputEvent::PressEnter { .. }) {
-                match Message::new(this.login.get_user().unwrap(), input.read(cx).text()) {
+                match Message::new(
+                    this.login.get_user().unwrap(),
+                    this.chat.bastion.clone(),
+                    input.read(cx).text(),
+                ) {
                     Ok(message) => {
                         this.chat.chat_messages.push(message);
                         input.update(cx, |input_state, cx| {
@@ -45,15 +53,17 @@ impl Chat {
 
         let person_1 = User::new("Ahmet").unwrap();
         let person_2 = User::new("Kaan").unwrap();
-        let message_1 = Message::new(person_1, "Hello, how are you?").unwrap();
-        let message_2 = Message::new(person_2, "I'm doing well. How are you?").unwrap();
+        let message_1 = Message::new(person_1, bastion(), "Hello, how are you?").unwrap();
+        let message_2 = Message::new(person_2, bastion(), "I'm doing well. How are you?").unwrap();
         let person_1 = User::new("Ahmet").unwrap();
-        let message_3 = Message::new(person_1, "I'm good too. Thanks for asking!").unwrap();
+        let message_3 =
+            Message::new(person_1, bastion(), "I'm good too. Thanks for asking!").unwrap();
         let person_2 = User::new("Kaan").unwrap();
-        let message_4 = Message::new(person_2, "A".repeat(1024)).unwrap();
+        let message_4 = Message::new(person_2, bastion(), "A".repeat(1024)).unwrap();
         let person_1 = User::new("Ahmet").unwrap();
         let person_2 = User::new("Kaan").unwrap();
         Self {
+            bastion: bastion(),
             users: vec![person_1, person_2],
             chat_messages: vec![message_1, message_2, message_3, message_4],
             message_input,
@@ -77,6 +87,7 @@ impl Nefes {
                 div()
                     .flex()
                     .flex_col()
+                    .flex_1()
                     .min_w_0()
                     .child(
                         div()
@@ -104,6 +115,7 @@ impl Nefes {
                     .h_full()
                     .flex()
                     .flex_col()
+                    .flex_shrink_0()
                     .w_1_5()
                     .border_l_1()
                     .border_color(rgb(0x2f3136))
@@ -135,7 +147,7 @@ fn render_message(message: &Message) -> impl IntoElement {
             div()
                 .text_color(rgb(0x7289da))
                 .font_weight(FontWeight::BOLD)
-                .child(message.get_sender().get_username().clone()),
+                .child(message.get_user().get_username().clone()),
         )
         .child(div().pl_2().child(message.get_message().clone()))
 }
