@@ -8,4 +8,5 @@ client = []
 server = []
 
 [dependencies]
-bitcode = "0.6.9"
+bitcode.workspace = true
+quinn.workspace = true

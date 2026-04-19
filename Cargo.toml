@@ -6,3 +6,8 @@ members = [
     "crates/server",
 ]
 
+[workspace.dependencies]
+common = { path = "crates/common" }
+tokio = {version = "1.51.1", features = ["full"]}
+bitcode = "0.6.9"
+quinn = "0.11.9"

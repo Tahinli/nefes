@@ -4,4 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-common = { version = "0.1.0", path = "../common", features = ["server"] }
+common = { workspace = true, features = ["client"] }
+tokio.workspace = true
+quinn.workspace = true
