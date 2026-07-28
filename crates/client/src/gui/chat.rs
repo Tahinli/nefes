@@ -1,10 +1,16 @@
-use common::{community::Community, message::Message, user::User, validate::validate_message_body};
+use common::{
+    community::Community,
+    message::Message,
+    user::User,
+    validate::{validate_community_name, validate_message_body},
+};
 use gpui::{
     AppContext, Context, Entity, FontWeight, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, Window, div, rgb,
 };
 use gpui_component::{
     WindowExt,
+    button::Button,
     input::{Input, InputEvent, InputState},
     notification::Notification,
 };
@@ -13,10 +19,12 @@ use crate::gui::Yumush;
 
 pub struct Chat {
     communities: Vec<Community>,
-    selected_community: Option<String>,
+    selected_community_id: Option<String>,
     users: Vec<User>,
     chat_messages: Vec<Message>,
     message_input: Entity<InputState>,
+    community_name_input: Entity<InputState>,
+    creating_community: bool,
 }
 
 impl Chat {
@@ -43,7 +51,7 @@ impl Chat {
                 };
 
                 let network = this.network.clone();
-                let Some(community_id) = this.chat.selected_community.clone() else {
+                let Some(community_id) = this.chat.selected_community_id.clone() else {
                     window.push_notification(Notification::error("No Community Selected"), cx);
                     return;
                 };
@@ -70,12 +78,32 @@ impl Chat {
         })
         .detach();
 
+        let community_name_input = cx.new(|cx| {
+            let mut input_state = InputState::new(window, cx);
+            input_state.set_placeholder("Community Name...", window, cx);
+
+            input_state
+        });
+
+        cx.subscribe_in(
+            &community_name_input,
+            window,
+            |this, input, event, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    create_community_action(this, input, window, cx);
+                }
+            },
+        )
+        .detach();
+
         Self {
             communities: vec![],
-            selected_community: None,
+            selected_community_id: None,
             users: vec![],
             chat_messages: vec![],
             message_input,
+            community_name_input,
+            creating_community: false,
         }
     }
 
@@ -94,14 +122,76 @@ impl Chat {
     }
 
     pub fn update_community_list(&mut self, communities: Vec<Community>) {
-        if self.selected_community.is_none() {
-            self.selected_community = communities
+        if self.selected_community_id.is_none() {
+            self.selected_community_id = communities
                 .first()
                 .map(|community| community.get_community_id().to_string());
         }
 
         self.communities = communities;
     }
+
+    pub fn get_selected_community_id(&self) -> Option<String> {
+        self.selected_community_id.to_owned()
+    }
+
+    pub fn set_selected_community_id(&mut self, selected_community_id: Option<String>) {
+        self.selected_community_id = selected_community_id
+    }
+
+    pub fn reset(&mut self) {
+        self.communities.clear();
+        self.selected_community_id = None;
+        self.users.clear();
+        self.chat_messages.clear();
+        self.creating_community = false;
+    }
+}
+
+fn create_community_action(
+    this: &mut Yumush,
+    input: &Entity<InputState>,
+    window: &mut Window,
+    cx: &mut Context<'_, Yumush>,
+) {
+    let community_name = input.read(cx).text().to_string();
+
+    if let Err(error_value) = validate_community_name(&community_name) {
+        window.push_notification(Notification::error(error_value.to_string()), cx);
+
+        return;
+    }
+
+    let network = this.network.clone();
+
+    input.update(cx, |input_state, cx| {
+        input_state.set_value("", window, cx);
+    });
+    this.chat.creating_community = false;
+
+    cx.spawn_in(window, async move |this, cx| {
+        let community = match network.create_community(&community_name).await {
+            Ok(community) => community,
+            Err(error_value) => {
+                let _ = this.update_in(cx, |_, window, cx| {
+                    window.push_notification(Notification::error(error_value.to_string()), cx);
+                });
+
+                return;
+            }
+        };
+
+        let _ = this.update_in(cx, |yumush, window, cx| {
+            yumush
+                .chat
+                .set_selected_community_id(Some(community.get_community_id().to_string()));
+            yumush.chat.update_user_list(vec![]);
+            yumush.get_communities(window, cx);
+            yumush.get_chat_users(window, cx);
+            cx.notify();
+        });
+    })
+    .detach();
 }
 
 impl Yumush {
@@ -126,15 +216,50 @@ impl Yumush {
                     .gap_1()
                     .child(
                         div()
-                            .text_color(rgb(0x949ba4))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child("Communities"),
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .child(
+                                div()
+                                    .text_color(rgb(0x949ba4))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child("Communities"),
+                            )
+                            .child({
+                                let entity = entity.clone();
+
+                                Button::new("create_community_button").label("+").on_click(
+                                    move |_, window, cx| {
+                                        entity.update(cx, |yumush, cx| {
+                                            yumush.chat.creating_community =
+                                                !yumush.chat.creating_community;
+
+                                            if yumush.chat.creating_community {
+                                                yumush.chat.community_name_input.update(
+                                                    cx,
+                                                    |input_state, cx| {
+                                                        input_state.focus(window, cx);
+                                                    },
+                                                );
+                                            }
+
+                                            cx.notify();
+                                        });
+                                    },
+                                )
+                            }),
+                    )
+                    .children(
+                        self.chat
+                            .creating_community
+                            .then(|| Input::new(&self.chat.community_name_input)),
                     )
                     .children(self.chat.communities.iter().enumerate().map(
                         |(index, community)| {
                             let community_id = community.get_community_id().to_string();
-                            let selected =
-                                self.chat.selected_community.as_deref() == Some(&community_id);
+                            let selected = self.chat.get_selected_community_id().as_deref()
+                                == Some(&community_id);
                             let entity = entity.clone();
 
                             div()
@@ -149,8 +274,9 @@ impl Yumush {
                                 .child(community.get_community_name().to_string())
                                 .on_click(move |_, window, cx| {
                                     entity.update(cx, |yumush, cx| {
-                                        yumush.chat.selected_community =
-                                            Some(community_id.to_owned());
+                                        yumush.chat.set_selected_community_id(Some(
+                                            community_id.to_owned(),
+                                        ));
                                         yumush.chat.update_user_list(vec![]);
                                         yumush.get_chat_users(window, cx);
                                         cx.notify();
@@ -181,7 +307,7 @@ impl Yumush {
                                     .iter()
                                     .filter(|message| {
                                         Some(message.get_community_id())
-                                            == self.chat.selected_community.as_deref()
+                                            == self.chat.get_selected_community_id().as_deref()
                                     })
                                     .map(|message| render_message(message, &self.chat.users)),
                             ),
@@ -225,7 +351,7 @@ impl Yumush {
     pub fn get_chat_users(&self, window: &mut Window, cx: &mut Context<Self>) {
         let network = self.network.clone();
 
-        let Some(community_id) = self.chat.selected_community.to_owned() else {
+        let Some(community_id) = self.chat.get_selected_community_id().to_owned() else {
             return;
         };
 
