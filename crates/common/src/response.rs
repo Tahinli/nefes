@@ -22,6 +22,7 @@ pub enum Response {
     ReadMessage(Message),
     UpdateMessage(Message),
     DeleteMessage(Message),
+    ReadMessageByCommunityIDWithMarkerAndLimit(Vec<Message>),
     JoinCommunity,
     LeaveCommunity,
     IsUserIn(bool),

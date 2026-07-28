@@ -96,3 +96,35 @@ impl DeleteMessage {
         &self.message_id
     }
 }
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct ReadMessageByCommunityIDWithMarkerAndLimit {
+    community_id: String,
+    marker: String,
+    limit: usize,
+}
+
+impl ReadMessageByCommunityIDWithMarkerAndLimit {
+    pub fn new(community_id: &str, marker: &str, limit: usize) -> Self {
+        let community_id = community_id.to_string();
+        let marker = marker.to_string();
+
+        Self {
+            community_id,
+            marker,
+            limit,
+        }
+    }
+
+    pub fn get_community_id(&self) -> &str {
+        &self.community_id
+    }
+
+    pub fn get_marker(&self) -> &str {
+        self.marker.as_str()
+    }
+
+    pub fn get_limit(&self) -> usize {
+        self.limit
+    }
+}

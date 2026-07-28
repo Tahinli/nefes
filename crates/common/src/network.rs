@@ -1,13 +1,17 @@
 use quinn::{RecvStream, SendStream};
 
 use crate::{
-    constant::MAXIMUM_MESSAGE_LENGTH, error::Error, message::Message, request::Request,
+    constant::{MAXIMUM_MESSAGE_LENGTH, MESSAGE_PAGE_LIMIT},
+    error::Error,
+    message::Message,
+    request::Request,
     response::Response,
 };
 
 pub const AUTHENTICATION_MAX_READ_LENGHT: usize = 64;
 pub const REQUEST_MAX_READ_LENGHT: usize = MAXIMUM_MESSAGE_LENGTH * 2;
-pub const RESPONCE_MAX_READ_LENGHT: usize = MAXIMUM_MESSAGE_LENGTH * 2;
+pub const MESSAGE_MAX_ENCODED_LENGTH: usize = MAXIMUM_MESSAGE_LENGTH * 2;
+pub const RESPONSE_MAX_READ_LENGHT: usize = MESSAGE_MAX_ENCODED_LENGTH * MESSAGE_PAGE_LIMIT;
 
 pub struct Network;
 
@@ -42,7 +46,7 @@ impl Network {
         send_stream.write_all(&bitcode::encode(request)).await?;
         send_stream.finish()?;
 
-        let response = receive_stream.read_to_end(RESPONCE_MAX_READ_LENGHT).await?;
+        let response = receive_stream.read_to_end(RESPONSE_MAX_READ_LENGHT).await?;
 
         Ok(bitcode::decode::<Response>(&response)?)
     }
@@ -65,10 +69,10 @@ impl Network {
         receive_stream.read_exact(&mut length_bytes).await?;
 
         let length = u32::from_le_bytes(length_bytes) as usize;
-        if length > RESPONCE_MAX_READ_LENGHT {
+        if length > MESSAGE_MAX_ENCODED_LENGTH {
             return Err(crate::error::network::Error::ReadBoundExceed(
                 length,
-                RESPONCE_MAX_READ_LENGHT,
+                RESPONSE_MAX_READ_LENGHT,
             )
             .into());
         }
