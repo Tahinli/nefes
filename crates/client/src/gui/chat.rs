@@ -1,5 +1,6 @@
 use common::{
     community::Community,
+    constant::NEWEST_MESSAGE_MARKER,
     message::Message,
     user::User,
     validate::{validate_community_name, validate_message_body},
@@ -114,7 +115,15 @@ impl Chat {
     }
 
     pub fn push_message(&mut self, message: Message) {
-        self.chat_messages.push(message);
+        self.merge_messages(vec![message]);
+    }
+
+    fn merge_messages(&mut self, messages: Vec<Message>) {
+        self.chat_messages.extend(messages);
+        self.chat_messages
+            .sort_by(|left, right| left.get_id().cmp(right.get_id()));
+        self.chat_messages
+            .dedup_by(|left, right| left.get_id() == right.get_id());
     }
 
     pub fn update_user_list(&mut self, users: Vec<User>) {
@@ -188,6 +197,7 @@ fn create_community_action(
             yumush.chat.update_user_list(vec![]);
             yumush.get_communities(window, cx);
             yumush.get_chat_users(window, cx);
+            yumush.get_chat_messages(window, cx);
             cx.notify();
         });
     })
@@ -279,6 +289,7 @@ impl Yumush {
                                         ));
                                         yumush.chat.update_user_list(vec![]);
                                         yumush.get_chat_users(window, cx);
+                                        yumush.get_chat_messages(window, cx);
                                         cx.notify();
                                     })
                                 })
@@ -376,6 +387,39 @@ impl Yumush {
 
             let _ = this.update(cx, |yumush, cx| {
                 yumush.chat.update_user_list(users);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    pub fn get_chat_messages(&self, window: &mut Window, cx: &mut Context<Self>) {
+        let network = self.network.clone();
+
+        let Some(community_id) = self.chat.get_selected_community_id() else {
+            return;
+        };
+
+        cx.spawn_in(window, async move |this, cx| {
+            let messages = match network
+                .read_message_by_community_id_with_marker_and_limit(
+                    community_id.as_str(),
+                    NEWEST_MESSAGE_MARKER,
+                )
+                .await
+            {
+                Ok(messages) => messages,
+                Err(error_value) => {
+                    let _ = this.update_in(cx, |_, window, cx| {
+                        window.push_notification(Notification::error(error_value.to_string()), cx);
+                    });
+
+                    return;
+                }
+            };
+
+            let _ = this.update(cx, |yumush, cx| {
+                yumush.chat.merge_messages(messages);
                 cx.notify();
             });
         })

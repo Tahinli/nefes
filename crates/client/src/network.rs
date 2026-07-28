@@ -103,6 +103,7 @@ network_commands! {
     ReadMessage => read_message(message_id) -> Message,
     UpdateMessage => update_message(message_id, message_body) -> Message,
     DeleteMessage => delete_message(message_id) -> Message,
+    ReadMessageByCommunityIDWithMarkerAndLimit => read_message_by_community_id_with_marker_and_limit(community_id, marker) -> Vec<Message>,
     JoinCommunity => join_community(user_id, community_id) -> (),
     LeaveCommunity => leave_community(user_id, community_id) -> (),
     IsUserIn => is_user_in(user_id, community_id) -> bool,

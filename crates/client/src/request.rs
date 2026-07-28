@@ -1,12 +1,16 @@
 use common::{
     community::Community,
+    constant::MESSAGE_PAGE_LIMIT,
     error::Error,
     message::Message,
     network::Network,
     request::{
         Authentication, Deauthentication, Request,
         community::{CreateCommunity, DeleteCommunity, ReadCommunity, UpdateCommunity},
-        message::{CreateMessage, DeleteMessage, ReadMessage, UpdateMessage},
+        message::{
+            CreateMessage, DeleteMessage, ReadMessage, ReadMessageByCommunityIDWithMarkerAndLimit,
+            UpdateMessage,
+        },
         user::{CreateUser, DeleteUser, ReadUser, UpdateUser},
         user_community::{CommunityOf, IsUserIn, JoinCommunity, LeaveCommunity, UsersIn},
     },
@@ -205,6 +209,28 @@ impl ClientRequest {
         send_request_receive_response_then_classify!(
             request,
             Response::DeleteMessage,
+            self.connection
+        )
+    }
+
+    pub async fn read_message_by_community_id_with_marker_and_limit(
+        &self,
+        community_id: &str,
+        marker: &str,
+    ) -> Result<Vec<Message>, Error> {
+        let read_message_by_community_id_with_marker_and_limit =
+            ReadMessageByCommunityIDWithMarkerAndLimit::new(
+                community_id,
+                marker,
+                MESSAGE_PAGE_LIMIT,
+            );
+        let request = Request::ReadMessageByCommunityIDWithMarkerAndLimit(
+            read_message_by_community_id_with_marker_and_limit,
+        );
+
+        send_request_receive_response_then_classify!(
+            request,
+            Response::ReadMessageByCommunityIDWithMarkerAndLimit,
             self.connection
         )
     }
