@@ -6,11 +6,15 @@ use crate::{
     database_::DB,
     error::Error,
     message::Message,
-    user::User,
+    user::{User, UserID},
     user_community::{JoinCommunity, LeaveCommunity, communitys_of, is_user_in, users_in},
 };
 
-pub async fn handle_request(request: Request, database_connection: &DB) -> Response {
+pub async fn handle_request(
+    user_id: Option<UserID>,
+    request: Request,
+    database_connection: &DB,
+) -> Response {
     let request_matcher = async || -> Result<Response, Error> {
         match request {
             Request::Authentication(authentication) => {
@@ -62,6 +66,11 @@ pub async fn handle_request(request: Request, database_connection: &DB) -> Respo
                     Community::create(create_community.get_community_name(), database_connection)
                         .await?;
 
+                let Some(user_id) = user_id else {
+                    unreachable!("Unexpected, user must be logged in");
+                };
+
+                JoinCommunity::apply(&user_id, community.get_id(), database_connection).await?;
                 Ok(Response::CreateCommunity(community.into()))
             }
             Request::ReadCommunity(read_community) => {
@@ -155,6 +164,16 @@ pub async fn handle_request(request: Request, database_connection: &DB) -> Respo
                     database_connection,
                 )
                 .await?;
+
+                let community = Community::read(
+                    &leave_community.get_community_id().into(),
+                    database_connection,
+                )
+                .await?;
+
+                if users_in(&community, database_connection).await?.is_empty() {
+                    community.delete(database_connection).await?;
+                }
 
                 Ok(Response::LeaveCommunity)
             }

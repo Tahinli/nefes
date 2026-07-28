@@ -14,7 +14,7 @@ mod database;
 
 static ULID: LazyLock<Mutex<Generator>> = LazyLock::new(|| Generator::new().into());
 
-#[derive(Debug, SurrealValue, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, SurrealValue, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct UserID(RecordId);
 
 impl UserID {
@@ -36,14 +36,6 @@ impl UserID {
             RecordIdKey::String(user_id) => user_id,
             _ => unreachable!("We shouldn't be here"),
         }
-    }
-}
-
-impl ToOwned for UserID {
-    type Owned = UserID;
-
-    fn to_owned(&self) -> Self::Owned {
-        Self(self.0.clone())
     }
 }
 

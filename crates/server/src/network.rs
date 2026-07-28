@@ -14,7 +14,7 @@ use crate::{
     database_::DB,
     error::Error,
     request::handle_request,
-    user::User,
+    user::{User, UserID},
     user_community::is_user_in,
 };
 
@@ -103,7 +103,10 @@ async fn establish_connection(
             user.get_id().as_str(),
             user.get_username().as_str(),
         ));
+
+        let user_id = user.get_id().to_owned();
         tokio::spawn(listen(
+            Some(user_id),
             connection.clone(),
             message_sender,
             database_connection.clone(),
@@ -121,17 +124,19 @@ async fn establish_connection(
 }
 
 async fn listen(
+    user_id: Option<UserID>,
     connection: Connection,
     message_sender: mpsc::Sender<common::message::Message>,
     database_connection: DB,
 ) {
-    let read_and_answer = async |send_stream: SendStream,
+    let read_and_answer = async |user_id: Option<UserID>,
+                                 send_stream: SendStream,
                                  receive_stream: RecvStream,
                                  message_sender: mpsc::Sender<common::message::Message>,
                                  database_connection: DB|
            -> Result<(), Error> {
         let request = Network::receive_request(receive_stream, None).await?;
-        let response = handle_request(request, &database_connection).await;
+        let response = handle_request(user_id, request, &database_connection).await;
 
         if let Response::CreateMessage(message) = &response {
             let _ = message_sender.send(message.to_owned()).await;
@@ -144,7 +149,10 @@ async fn listen(
 
     while let Ok((send_stream, receive_stream)) = connection.accept_bi().await {
         let database_connection = database_connection.clone();
+        let user_id = user_id.clone();
+
         tokio::spawn(read_and_answer(
+            user_id,
             send_stream,
             receive_stream,
             message_sender.clone(),
