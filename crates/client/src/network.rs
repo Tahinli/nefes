@@ -153,6 +153,8 @@ async fn actor(
     event_sender: mpsc::Sender<NetworkEvent>,
 ) {
     let mut authentication_token: Option<String> = None;
+    let mut authentication_epoch = 0;
+    let (token_sender, mut token_receiver) = mpsc::channel(CHANNEL_SIZE);
     'session: loop {
         let client_request = loop {
             match connect(&client_config.server_address, &client_config.server_name).await {
@@ -195,13 +197,25 @@ async fn actor(
         loop {
             tokio::select! {
                 command = command_receiver.recv() => match command {
+                    Some(NetworkCommand::Authenticate {authentication_token: authentication_token_, reply}) => {
+                        let client_request = client_request.clone();
+                        let token_sender = token_sender.clone();
+                        let epoch = authentication_epoch;
+
+                        tokio::spawn(async move {
+                            let result = client_request.authenticate(&authentication_token_).await;
+                            if result.is_ok() {
+                                let _ = token_sender.send((epoch, authentication_token_)).await;
+                            }
+
+                            let _ = reply.send(result);
+                        });
+                    }
                     Some(command) => {
                         match &command {
-                            NetworkCommand::Authenticate { authentication_token: authentication_token_, .. } => {
-                                authentication_token = Some(authentication_token_.to_owned());
-                            }
                             NetworkCommand::Deauthenticate { .. } => {
                                 authentication_token = None;
+                                authentication_epoch += 1;
                             }
                             _ => {}
                         }
@@ -209,6 +223,12 @@ async fn actor(
                     }
                     None => break 'session,
                 },
+                Some((epoch, authentication_token_)) = token_receiver.recv() => {
+                    if epoch == authentication_epoch {
+                        authentication_token = Some(authentication_token_)
+                    }
+                }
+
                 error_value = client_request.closed() => {
                     if event_sender.send(NetworkEvent::Disconnected(error_value.into())).await.is_err() {
                         return ;
