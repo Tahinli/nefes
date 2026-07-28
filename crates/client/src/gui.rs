@@ -1,6 +1,6 @@
 use common::user::User;
 use gpui::{IntoElement, ParentElement, Render, Styled, div, rgb};
-use gpui_component::Root;
+use gpui_component::{Root, WindowExt, button::Button, notification::Notification};
 use tokio::sync::mpsc;
 
 use crate::{
@@ -83,6 +83,26 @@ impl Yumush {
         self.user.as_ref().map(|user| user.get_username())
     }
 
+    fn logout(&mut self, window: &mut gpui::Window, cx: &mut gpui::Context<Self>) {
+        let Some(user) = self.get_user() else {
+            return;
+        };
+        let network = self.network.clone();
+
+        self.reset_user();
+        self.chat.reset();
+        self.change_page(Route::Login, window, cx);
+
+        cx.spawn_in(window, async move |this, cx| {
+            if let Err(error_value) = network.deauthenticate(user.get_username()).await {
+                let _ = this.update_in(cx, |_, window, cx| {
+                    window.push_notification(Notification::error(error_value.to_string()), cx);
+                });
+            }
+        })
+        .detach();
+    }
+
     fn change_page(
         &mut self,
         new_route: Route,
@@ -157,16 +177,32 @@ impl Render for Yumush {
                     .absolute()
                     .top_2()
                     .right_2()
-                    .text_color(if self.connected {
-                        rgb(0x22c55e)
-                    } else {
-                        rgb(0xef4444)
-                    })
-                    .child(format!(
-                        "{:?} is {}",
-                        self.get_username(),
-                        if self.connected { "online" } else { "offline" }
-                    )),
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    .child(
+                        div()
+                            .text_color(if self.connected {
+                                rgb(0x22c55e)
+                            } else {
+                                rgb(0xef4444)
+                            })
+                            .child(format!(
+                                "{:?} is {}",
+                                self.get_username(),
+                                if self.connected { "online" } else { "offline" }
+                            )),
+                    )
+                    .children(self.is_logged_in().then(|| {
+                        let entity = cx.entity();
+
+                        Button::new("logout_button").label("Logout").on_click(
+                            move |_, window, cx| {
+                                entity.update(cx, |yumush, cx| yumush.logout(window, cx));
+                            },
+                        )
+                    })),
             )
     }
 }
