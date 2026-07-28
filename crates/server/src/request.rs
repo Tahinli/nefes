@@ -11,7 +11,7 @@ use crate::{
 };
 
 pub async fn handle_request(
-    user_id: Option<UserID>,
+    user_id: UserID,
     request: Request,
     database_connection: &DB,
 ) -> Response {
@@ -65,10 +65,6 @@ pub async fn handle_request(
                 let community =
                     Community::create(create_community.get_community_name(), database_connection)
                         .await?;
-
-                let Some(user_id) = user_id else {
-                    unreachable!("Unexpected, user must be logged in");
-                };
 
                 JoinCommunity::apply(&user_id, community.get_id(), database_connection).await?;
                 Ok(Response::CreateCommunity(community.into()))
@@ -146,6 +142,25 @@ pub async fn handle_request(
                 let message = message.delete(database_connection).await?;
 
                 Ok(Response::DeleteMessage(message.into()))
+            }
+            Request::ReadMessageByCommunityIDWithMarkerAndLimit(
+                read_message_by_community_id_with_marker_and_limit,
+            ) => {
+                let messages = Message::read_by_community_id_with_marker_and_limit(
+                    &read_message_by_community_id_with_marker_and_limit
+                        .get_community_id()
+                        .into(),
+                    &read_message_by_community_id_with_marker_and_limit
+                        .get_marker()
+                        .into(),
+                    read_message_by_community_id_with_marker_and_limit.get_limit(),
+                    database_connection,
+                )
+                .await?;
+
+                Ok(Response::ReadMessageByCommunityIDWithMarkerAndLimit(
+                    messages.into_iter().map(Into::into).collect(),
+                ))
             }
             Request::JoinCommunity(join_community) => {
                 JoinCommunity::apply(

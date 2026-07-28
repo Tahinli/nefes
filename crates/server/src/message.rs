@@ -146,6 +146,21 @@ impl Message {
         database::read_by_community_id(community_id, database_connection).await
     }
 
+    pub async fn read_by_community_id_with_marker_and_limit(
+        community_id: &CommunityID,
+        marker: &MessageID,
+        limit: usize,
+        database_connection: &DB,
+    ) -> Result<Vec<Message>, Error> {
+        database::read_by_community_id_with_marker_and_limit(
+            community_id,
+            marker,
+            limit,
+            database_connection,
+        )
+        .await
+    }
+
     pub async fn read_by_user_id(
         user_id: &UserID,
         database_connection: &DB,
@@ -279,6 +294,77 @@ mod tests {
             Message::read_by_community_id(community_1.get_id(), &database_connection)
                 .await
                 .unwrap();
+
+        assert_eq!(expected_result, searched_messages);
+    }
+
+    #[tokio::test]
+    async fn read_by_community_id_with_marker_and_limit() {
+        let (database_connection, _temp_directory) = test::get_database().await;
+
+        let username = "Tahinli";
+        let name = username;
+
+        let user_1 = User::create(username, &database_connection).await.unwrap();
+        let user_2 = User::create("Not Tahinli", &database_connection)
+            .await
+            .unwrap();
+        let community = Community::create(name, &database_connection).await.unwrap();
+
+        let message_ = name;
+        let created_message_1 =
+            Message::create(&user_1, &community, message_, &database_connection)
+                .await
+                .unwrap();
+        let created_message_2 =
+            Message::create(&user_2, &community, message_, &database_connection)
+                .await
+                .unwrap();
+
+        let created_message_3 =
+            Message::create(&user_2, &community, message_, &database_connection)
+                .await
+                .unwrap();
+
+        let created_message_2_id = created_message_2.get_id().to_owned();
+        let created_message_3_id = created_message_3.get_id().to_owned();
+
+        let mut expected_result = vec![created_message_1, created_message_2, created_message_3];
+
+        let searched_messages = Message::read_by_community_id_with_marker_and_limit(
+            community.get_id(),
+            &created_message_3_id,
+            3,
+            &database_connection,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(expected_result, searched_messages);
+
+        expected_result.remove(0);
+
+        let searched_messages = Message::read_by_community_id_with_marker_and_limit(
+            community.get_id(),
+            &created_message_3_id,
+            2,
+            &database_connection,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(expected_result, searched_messages);
+
+        expected_result.pop();
+
+        let searched_messages = Message::read_by_community_id_with_marker_and_limit(
+            community.get_id(),
+            &created_message_2_id,
+            1,
+            &database_connection,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(expected_result, searched_messages);
     }

@@ -106,7 +106,7 @@ async fn establish_connection(
 
         let user_id = user.get_id().to_owned();
         tokio::spawn(listen(
-            Some(user_id),
+            user_id,
             connection.clone(),
             message_sender,
             database_connection.clone(),
@@ -124,12 +124,12 @@ async fn establish_connection(
 }
 
 async fn listen(
-    user_id: Option<UserID>,
+    user_id: UserID,
     connection: Connection,
     message_sender: mpsc::Sender<common::message::Message>,
     database_connection: DB,
 ) {
-    let read_and_answer = async |user_id: Option<UserID>,
+    let read_and_answer = async |user_id: UserID,
                                  send_stream: SendStream,
                                  receive_stream: RecvStream,
                                  message_sender: mpsc::Sender<common::message::Message>,

@@ -41,6 +41,33 @@ pub(super) async fn read_by_community_id(
     Ok(result)
 }
 
+pub(super) async fn read_by_community_id_with_marker_and_limit(
+    community_id: &CommunityID,
+    marker: &MessageID,
+    limit: usize,
+    database_connection: &DB,
+) -> Result<Vec<Message>, Error> {
+    let query = "
+            SELECT * FROM type::table($table)
+            WHERE community_id = $community_id AND id <= $before
+            ORDER BY id DESC LIMIT $limit;
+        ";
+
+    let mut result = database_connection
+        .query(query)
+        .bind(("table", MESSAGE_TABLE))
+        .bind(("community_id", community_id.as_record_id()))
+        .bind(("limit", limit))
+        .bind(("before", marker.as_record_id()))
+        .await?
+        .check()?;
+
+    let mut result = result.take::<Vec<_>>(0)?;
+    result.reverse();
+
+    Ok(result)
+}
+
 pub(super) async fn read_by_user_id(
     user_id: &UserID,
     database_connection: &DB,
