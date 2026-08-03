@@ -6,7 +6,9 @@ use common::{
     network::Network,
     request::{
         Authentication, Deauthentication, Request,
-        community::{CreateCommunity, DeleteCommunity, ReadCommunity, UpdateCommunity},
+        community::{
+            CreateCommunity, DeleteCommunity, ReadCommunity, SearchCommunity, UpdateCommunity,
+        },
         message::{
             CreateMessage, DeleteMessage, ReadMessage, ReadMessageByCommunityIDWithMarkerAndLimit,
             UpdateMessage,
@@ -278,6 +280,17 @@ impl ClientRequest {
         send_request_receive_response_then_classify!(
             request,
             Response::CommunityOf,
+            self.connection
+        )
+    }
+
+    pub async fn search_community(&self, community_name: &str) -> Result<Vec<Community>, Error> {
+        let search_community = SearchCommunity::new(community_name)?;
+        let request = Request::SearchCommunity(search_community);
+
+        send_request_receive_response_then_classify!(
+            request,
+            Response::SearchCommunity,
             self.connection
         )
     }

@@ -26,6 +26,9 @@ pub struct Chat {
     message_input: Entity<InputState>,
     community_name_input: Entity<InputState>,
     creating_community: bool,
+    community_search_input: Entity<InputState>,
+    community_search_results: Vec<Community>,
+    joining_community: bool,
 }
 
 impl Chat {
@@ -97,6 +100,24 @@ impl Chat {
         )
         .detach();
 
+        let community_search_input = cx.new(|cx| {
+            let mut input_state = InputState::new(window, cx);
+            input_state.set_placeholder("Community Name...", window, cx);
+
+            input_state
+        });
+
+        cx.subscribe_in(
+            &community_search_input,
+            window,
+            |this, input, event, window, cx| {
+                if matches!(event, InputEvent::PressEnter { .. }) {
+                    search_community_action(this, input, window, cx);
+                }
+            },
+        )
+        .detach();
+
         Self {
             communities: vec![],
             selected_community_id: None,
@@ -105,6 +126,9 @@ impl Chat {
             message_input,
             community_name_input,
             creating_community: false,
+            community_search_input,
+            community_search_results: vec![],
+            joining_community: false,
         }
     }
 
@@ -148,12 +172,22 @@ impl Chat {
         self.selected_community_id = selected_community_id
     }
 
+    pub fn update_searched_community_list(&mut self, communities: Vec<Community>) {
+        self.community_search_results = communities;
+    }
+
+    pub fn set_joining_community(&mut self, joining_community: bool) {
+        self.joining_community = joining_community
+    }
+
     pub fn reset(&mut self) {
         self.communities.clear();
         self.selected_community_id = None;
         self.users.clear();
         self.chat_messages.clear();
         self.creating_community = false;
+        self.community_search_results.clear();
+        self.joining_community = false;
     }
 }
 
@@ -198,6 +232,42 @@ fn create_community_action(
             yumush.get_communities(window, cx);
             yumush.get_chat_users(window, cx);
             yumush.get_chat_messages(window, cx);
+            cx.notify();
+        });
+    })
+    .detach();
+}
+
+fn search_community_action(
+    this: &mut Yumush,
+    input: &Entity<InputState>,
+    window: &mut Window,
+    cx: &mut Context<'_, Yumush>,
+) {
+    let community_name = input.read(cx).text().to_string();
+
+    if let Err(error_value) = validate_community_name(&community_name) {
+        window.push_notification(Notification::error(error_value.to_string()), cx);
+
+        return;
+    }
+
+    let network = this.network.clone();
+
+    cx.spawn_in(window, async move |this, cx| {
+        let communities = match network.search_community(&community_name).await {
+            Ok(communities) => communities,
+            Err(error_value) => {
+                let _ = this.update_in(cx, |_, window, cx| {
+                    window.push_notification(Notification::error(error_value.to_string()), cx);
+                });
+
+                return;
+            }
+        };
+
+        let _ = this.update(cx, |yumush, cx| {
+            yumush.chat.update_searched_community_list(communities);
             cx.notify();
         });
     })
@@ -258,12 +328,70 @@ impl Yumush {
                                         });
                                     },
                                 )
+                            })
+                            .child({
+                                let entity = entity.clone();
+
+                                Button::new("join_community_button").label("Join").on_click(
+                                    move |_, window, cx| {
+                                        entity.update(cx, |yumush, cx| {
+                                            yumush.chat.joining_community =
+                                                !yumush.chat.joining_community;
+
+                                            if yumush.chat.joining_community {
+                                                yumush.chat.community_search_input.update(
+                                                    cx,
+                                                    |input_state, cx| {
+                                                        input_state.focus(window, cx);
+                                                    },
+                                                );
+                                            } else {
+                                                yumush.chat.update_searched_community_list(vec![]);
+                                            }
+
+                                            cx.notify();
+                                        });
+                                    },
+                                )
                             }),
                     )
                     .children(
                         self.chat
                             .creating_community
                             .then(|| Input::new(&self.chat.community_name_input)),
+                    )
+                    .children(
+                        self.chat
+                            .joining_community
+                            .then(|| Input::new(&self.chat.community_search_input)),
+                    )
+                    .children(
+                        self.chat
+                            .community_search_results
+                            .iter()
+                            .filter(|result| {
+                                !self.chat.communities.iter().any(|community| {
+                                    community.get_community_id() == result.get_community_id()
+                                })
+                            })
+                            .enumerate()
+                            .map(|(index, result)| {
+                                let community_id = result.get_community_id().to_string();
+                                let entity = entity.clone();
+
+                                div()
+                                    .id(("community_search_result", index))
+                                    .p_1()
+                                    .cursor_pointer()
+                                    .bg(rgb(0x1e1f22))
+                                    .text_color(rgb(0x949ba4))
+                                    .child(result.get_community_name().to_string())
+                                    .on_click(move |_, window, cx| {
+                                        entity.update(cx, |yumush, cx| {
+                                            yumush.join_community(&community_id, window, cx);
+                                        })
+                                    })
+                            }),
                     )
                     .children(self.chat.communities.iter().enumerate().map(
                         |(index, community)| {
@@ -454,6 +582,41 @@ impl Yumush {
 
             let _ = this.update(cx, |yumush, cx| {
                 yumush.chat.update_community_list(communities);
+                cx.notify();
+            });
+        })
+        .detach();
+    }
+
+    pub fn join_community(&self, community_id: &str, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(user) = self.get_user() else {
+            return;
+        };
+
+        let network = self.network.clone();
+        let community_id = community_id.to_string();
+
+        cx.spawn_in(window, async move |this, cx| {
+            if let Err(error_value) = network
+                .join_community(user.get_user_id(), &community_id)
+                .await
+            {
+                let _ = this.update_in(cx, |_, window, cx| {
+                    window.push_notification(Notification::error(error_value.to_string()), cx);
+                });
+
+                return;
+            }
+
+            let _ = this.update_in(cx, |yumush, window, cx| {
+                yumush.chat.set_joining_community(false);
+                yumush.chat.update_searched_community_list(vec![]);
+                yumush.chat.set_selected_community_id(Some(community_id));
+                yumush.chat.update_user_list(vec![]);
+                yumush.get_communities(window, cx);
+                yumush.get_chat_users(window, cx);
+                yumush.get_chat_messages(window, cx);
+
                 cx.notify();
             });
         })

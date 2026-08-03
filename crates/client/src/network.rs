@@ -109,6 +109,7 @@ network_commands! {
     IsUserIn => is_user_in(user_id, community_id) -> bool,
     UsersIn => users_in(community_id) -> Vec<String>,
     CommunityOf => community_of(user_id) -> Vec<String>,
+    SearchCommunity => search_community(community_name) -> Vec<Community>,
 }
 
 #[derive(Debug)]
