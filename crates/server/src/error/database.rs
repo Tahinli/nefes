@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use common::error_from;
+
 #[derive(Debug)]
 pub enum Error {
     Inner(surrealdb::Error),
@@ -23,8 +25,6 @@ impl Display for Error {
     }
 }
 
-impl From<surrealdb::Error> for Error {
-    fn from(value: surrealdb::Error) -> Self {
-        Self::Inner(value)
-    }
-}
+error_from! { Error {
+    surrealdb::Error => Error::Inner,
+} }

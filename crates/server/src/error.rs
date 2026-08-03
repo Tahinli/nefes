@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use common::error_from;
+
 pub mod database;
 
 #[derive(Debug)]
@@ -19,104 +21,37 @@ impl Display for Error {
     }
 }
 
-impl From<common::error::Error> for Error {
-    fn from(value: common::error::Error) -> Self {
-        Self::Common(value)
-    }
-}
+impl From<Error> for common::error::Error {
+    fn from(value: Error) -> Self {
+        match value {
+            Error::Common(error_value) => error_value,
+            Error::Database(error_value) => {
+                eprintln!("Error: Database | {}", error_value);
 
-impl From<common::error::user::Error> for Error {
-    fn from(value: common::error::user::Error) -> Self {
-        Self::Common(value.into())
-    }
-}
-
-impl From<common::error::community::Error> for Error {
-    fn from(value: common::error::community::Error) -> Self {
-        Self::Common(value.into())
-    }
-}
-
-impl From<common::error::message::Error> for Error {
-    fn from(value: common::error::message::Error) -> Self {
-        Self::Common(value.into())
-    }
-}
-
-impl Into<common::error::Error> for Error {
-    fn into(self) -> common::error::Error {
-        match self {
-            Error::Common(error) => error,
-            Error::Database(error) => {
-                eprintln!("Error: Database | {}", error);
                 common::error::Error::Server
             }
         }
     }
 }
 
-impl From<database::Error> for Error {
-    fn from(value: database::Error) -> Self {
-        Self::Database(value)
-    }
-}
+error_from! { Error {
+    common::error::Error => Error::Common,
+    database::Error => Error::Database,
 
-impl From<surrealdb::Error> for Error {
-    fn from(value: surrealdb::Error) -> Self {
-        database::Error::from(value).into()
-    }
-}
+    common::error::user::Error => Error::Common as common::error::Error,
+    common::error::community::Error => Error::Common as common::error::Error,
+    common::error::message::Error => Error::Common as common::error::Error,
 
-impl From<std::net::AddrParseError> for Error {
-    fn from(value: std::net::AddrParseError) -> Self {
-        Self::Common(value.into())
-    }
-}
+    surrealdb::Error => Error::Database as database::Error,
 
-impl From<std::io::Error> for Error {
-    fn from(value: std::io::Error) -> Self {
-        Self::Common(value.into())
-    }
-}
-
-impl From<quinn::ConnectionError> for Error {
-    fn from(value: quinn::ConnectionError) -> Self {
-        Self::Common(common::error::network::Error::from(value).into())
-    }
-}
-
-impl From<quinn::ConnectError> for Error {
-    fn from(value: quinn::ConnectError) -> Self {
-        Self::Common(value.into())
-    }
-}
-
-impl From<quinn::ReadError> for Error {
-    fn from(value: quinn::ReadError) -> Self {
-        Self::Common(common::error::network::Error::from(value).into())
-    }
-}
-
-impl From<quinn::ReadToEndError> for Error {
-    fn from(value: quinn::ReadToEndError) -> Self {
-        Self::Common(common::error::network::Error::from(value).into())
-    }
-}
-
-impl From<quinn::WriteError> for Error {
-    fn from(value: quinn::WriteError) -> Self {
-        Self::Common(common::error::network::Error::from(value).into())
-    }
-}
-
-impl From<quinn::ClosedStream> for Error {
-    fn from(value: quinn::ClosedStream) -> Self {
-        Self::Common(common::error::network::Error::from(value).into())
-    }
-}
-
-impl From<bitcode::Error> for Error {
-    fn from(value: bitcode::Error) -> Self {
-        Self::Common(common::error::decode::Error::from(value).into())
-    }
-}
+    std::net::AddrParseError => Error::Common as common::error::network::Error,
+    std::io::Error => Error::Common as common::error::network::Error,
+    quinn::ConnectionError => Error::Common as common::error::network::Error,
+    quinn::ConnectError => Error::Common as common::error::network::Error,
+    quinn::ReadError => Error::Common as common::error::network::Error,
+    quinn::ReadToEndError => Error::Common as common::error::network::Error,
+    quinn::ReadExactError => Error::Common as common::error::network::Error,
+    quinn::WriteError => Error::Common as common::error::network::Error,
+    quinn::ClosedStream => Error::Common as common::error::network::Error,
+    bitcode::Error => Error::Common as common::error::decode::Error,
+} }
