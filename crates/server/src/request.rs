@@ -230,6 +230,17 @@ pub async fn handle_request(
                         .collect(),
                 ))
             }
+            Request::SearchCommunity(search_community) => {
+                let communities = Community::read_by_name(
+                    search_community.get_community_name(),
+                    database_connection,
+                )
+                .await?;
+
+                Ok(Response::SearchCommunity(
+                    communities.into_iter().map(Into::into).collect(),
+                ))
+            }
         }
     };
 
