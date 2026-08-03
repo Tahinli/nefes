@@ -28,5 +28,6 @@ pub enum Response {
     IsUserIn(bool),
     UsersIn(Vec<String>),
     CommunityOf(Vec<String>),
+    SearchCommunity(Vec<Community>),
     Error(Error),
 }

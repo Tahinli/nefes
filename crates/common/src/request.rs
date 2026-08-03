@@ -1,7 +1,9 @@
 use bitcode::{Decode, Encode};
 
 use crate::request::{
-    community::{CreateCommunity, DeleteCommunity, ReadCommunity, UpdateCommunity},
+    community::{
+        CreateCommunity, DeleteCommunity, ReadCommunity, SearchCommunity, UpdateCommunity,
+    },
     message::{
         CreateMessage, DeleteMessage, ReadMessage, ReadMessageByCommunityIDWithMarkerAndLimit,
         UpdateMessage,
@@ -63,4 +65,5 @@ pub enum Request {
     IsUserIn(IsUserIn),
     UsersIn(UsersIn),
     CommunityOf(CommunityOf),
+    SearchCommunity(SearchCommunity),
 }

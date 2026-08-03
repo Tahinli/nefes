@@ -80,3 +80,21 @@ impl DeleteCommunity {
         &self.community_id
     }
 }
+
+#[derive(Debug, Clone, Encode, Decode)]
+pub struct SearchCommunity {
+    community_name: String,
+}
+
+impl SearchCommunity {
+    pub fn new(community_name: &str) -> Result<Self, Error> {
+        let community_name = community_name.to_string();
+        validate_community_name(&community_name)?;
+
+        Ok(Self { community_name })
+    }
+
+    pub fn get_community_name(&self) -> &str {
+        &self.community_name
+    }
+}
