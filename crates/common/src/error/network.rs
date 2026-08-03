@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use bitcode::{Decode, Encode};
 
+use crate::error_from_display;
+
 #[derive(Debug, Clone, Encode, Decode)]
 pub enum Error {
     AddressParse(String),
@@ -43,56 +45,14 @@ impl Display for Error {
     }
 }
 
-impl From<std::net::AddrParseError> for Error {
-    fn from(value: std::net::AddrParseError) -> Self {
-        Self::AddressParse(value.to_string())
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(value: std::io::Error) -> Self {
-        Self::InputOutput(value.to_string())
-    }
-}
-
-impl From<quinn::ConnectionError> for Error {
-    fn from(value: quinn::ConnectionError) -> Self {
-        Self::Connection(value.to_string())
-    }
-}
-
-impl From<quinn::ConnectError> for Error {
-    fn from(value: quinn::ConnectError) -> Self {
-        Self::AddressParse(value.to_string())
-    }
-}
-
-impl From<quinn::ReadError> for Error {
-    fn from(value: quinn::ReadError) -> Self {
-        Self::Read(value.to_string())
-    }
-}
-
-impl From<quinn::ReadToEndError> for Error {
-    fn from(value: quinn::ReadToEndError) -> Self {
-        Self::ReadToEnd(value.to_string())
-    }
-}
-
-impl From<quinn::ReadExactError> for Error {
-    fn from(value: quinn::ReadExactError) -> Self {
-        Self::ReadExact(value.to_string())
-    }
-}
-
-impl From<quinn::WriteError> for Error {
-    fn from(value: quinn::WriteError) -> Self {
-        Self::Write(value.to_string())
-    }
-}
-
-impl From<quinn::ClosedStream> for Error {
-    fn from(value: quinn::ClosedStream) -> Self {
-        Self::ClosedStream(value.to_string())
-    }
-}
+error_from_display! { Error {
+    std::net::AddrParseError => Error::AddressParse,
+    std::io::Error => Error::InputOutput,
+    quinn::ConnectionError => Error::Connection,
+    quinn::ConnectError => Error::Connect,
+    quinn::ReadError => Error::Read,
+    quinn::ReadToEndError => Error::ReadToEnd,
+    quinn::ReadExactError => Error::ReadExact,
+    quinn::WriteError => Error::Write,
+    quinn::ClosedStream => Error::ClosedStream,
+} }

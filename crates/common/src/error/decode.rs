@@ -2,6 +2,8 @@ use std::fmt::Display;
 
 use bitcode::{Decode, Encode};
 
+use crate::error_from_display;
+
 #[derive(Debug, Clone, Encode, Decode)]
 pub enum Error {
     Inner(String),
@@ -17,8 +19,6 @@ impl Display for Error {
     }
 }
 
-impl From<bitcode::Error> for Error {
-    fn from(value: bitcode::Error) -> Self {
-        Self::Inner(value.to_string())
-    }
-}
+error_from_display! { Error {
+    bitcode::Error => Error::Inner,
+} }
